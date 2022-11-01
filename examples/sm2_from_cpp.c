@@ -10,7 +10,7 @@
 #include <openssl/err.h>
 //#include "log.h"
 
-#define LOGE(fmt, x...) 
+#define LOGE(fmt, x...)  printf("%s:%s:%d: " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ##x);
 
 static int CreateEVP_PKEY(unsigned char* key, int is_public, EVP_PKEY** out_ecKey);
 static int PriKey2PubKey(char *in_priKey, char **out_pubKey);
@@ -176,7 +176,7 @@ int Sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *priKey)
 	}
 	else
 	{
-        memcpy(out_sig, szSign, len_sig);
+        memcpy(out_sig, szSign, *len_sig);
 		ret_val = 0;
 	}
 	BIO_free(keybio);
@@ -366,5 +366,41 @@ clean_up:
 int main(int argc, char **argv)
 {
 
+// static int PriKey2PubKey(char *in_priKey, char **out_pubKey);
+// static int GenEcPairKey(char **out_priKey, char **out_pubKey);
+// static int Sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *priKey);
+// static int Verify(char *in_buf, const int buflen, char *sig, const int siglen, char *pubkey, const int keylen);
+// static int Encrypt(char *in_buf, int in_buflen, char *out_encrypted, int *len_encrypted, char *pubKey);
+// static int Decrypt(char *in_buf, int in_buflen, char *out_plaint, int *len_plaint, char *prikey);
+ 
+	int ret = 0;
+	char *prikey = NULL;
+	char *pubkey = NULL;
+
+	ret = GenEcPairKey(&prikey, &pubkey);
+	LOGE("ret=%d\n", ret);
+	printf("%s\n", prikey);
+	printf("%s\n", pubkey);
+	char *raw_data = "aaaaa";
+	int raw_data_len = strlen(raw_data);
+	char sign_data[256] = {0};
+	int sign_data_len = 0;
+
+	ret = Sign(raw_data, raw_data_len, sign_data, &sign_data_len, prikey);
+	LOGE("ret=%d\n", ret);
+	if (0 == ret) {
+		LOGE("sing successful\n");
+	} else {
+		LOGE("sign failed\n");
+	}
+	LOGE("sign_data_len=%d\n", sign_data_len);
+
+	ret = Verify(raw_data, raw_data_len, sign_data, sign_data_len, pubkey, strlen(pubkey));
+	LOGE("ret=%d\n", ret);
+	if (0 == ret) {
+		LOGE("verify successful\n");
+	} else {
+		LOGE("verify failed\n");
+	}
     return 0;
 }
