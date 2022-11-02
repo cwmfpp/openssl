@@ -331,6 +331,33 @@ clean_up:
     return ret;
 }
 
+void cry_hash(int cry_type, unsigned char *raw_data, int raw_data_len,
+              unsigned char *hash_val, int *hash_len)
+{
+    int sm3_len, i;
+    EVP_MD_CTX *sm3ctx;        // EVP消息摘要结构体
+    sm3ctx = EVP_MD_CTX_new(); //调用函数初始化
+    //设置摘要算法和密码算法引擎，这里密码算法使用sm3，算法引擎使用OpenSSL默认引擎即软算法
+	if (NULL == hash_val && NULL == hash_len) {
+		return -1;
+	}
+
+    EVP_DigestInit_ex(sm3ctx, EVP_sm3(), NULL);
+    // if (NULL != vkek_cipher && vkek_len > 0) {
+    //     EVP_DigestUpdate(sm3ctx, vkek_cipher, vkek_len); //调用摘要UpDate计算msg1的摘要
+    // }
+    if (NULL != raw_data && raw_data_len > 0) {
+        EVP_DigestUpdate(sm3ctx, raw_data, raw_data_len); //调用摘要UpDate计算msg2的摘要
+    }
+    EVP_DigestFinal_ex(sm3ctx, hash_val, hash_len); //摘要结束，输出摘要值
+    EVP_MD_CTX_reset(sm3ctx);                        //释放内存
+
+    for (i = 0; i < *hash_len; i++) {
+        printf("0x%02x ", hash_val[i]);
+    }
+    printf("\n");
+}
+
 int main(int argc, char **argv)
 {
 
@@ -377,6 +404,11 @@ int main(int argc, char **argv)
     } else {
         LOGE("verify failed\n");
     }
+
+    unsigned char hash_value[EVP_MAX_MD_SIZE];
+	int hash_len = 0;
+	char *plain_raw_data = "helloworld";
+	cry_hash(0, plain_raw_data, plain_raw_data == NULL ? 0 : strlen(plain_raw_data), hash_value, &hash_len);
 
     return 0;
 }
