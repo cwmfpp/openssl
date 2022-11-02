@@ -12,18 +12,18 @@
 #define LOGE(fmt, x...)  printf("%s:%s:%d: " fmt "\n", __FILE__, __FUNCTION__, __LINE__, ##x);
 
 static int CreateEVP_PKEY(unsigned char* key, int is_public, EVP_PKEY** out_ecKey);
-static int cry_prikey2pubkey(char *in_priKey, char **out_pubKey);
-static int cry_gen_ec_pair_key(char **out_priKey, char **out_pubKey);
-static int cry_sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *priKey);
+static int cry_prikey2pubkey(char *in_prikey, char *out_pubkey);
+static int cry_gen_ec_pair_key(char *out_prikey, int prikey_len, char *out_pubkey, int pubkey_len);
+static int cry_sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *prikey, int prikey_len);
 static int cry_verify(char *in_buf, const int buflen, char *sig, const int siglen, char *pubkey, const int keylen);
 static int cry_encrypto(char *in_buf, int in_buflen, char *out_encrypted, int *len_encrypted, char *pubKey);
 static int cry_decrypto(char *in_buf, int in_buflen, char *out_plaint, int *len_plaint, char *prikey);
  
-int cry_gen_ec_pair_key(char **out_priKey, char **out_pubKey)
+int cry_gen_ec_pair_key(char *out_prikey, int prikey_len, char *out_pubkey, int pubkey_len)
 {
     EC_KEY *ecKey;
     EC_GROUP *ecGroup;
-    int ret_val = -1;
+    int ret = 0;
     if (NULL == (ecKey = EC_KEY_new())) {
         return -1;
     }
@@ -59,19 +59,22 @@ int cry_gen_ec_pair_key(char **out_priKey, char **out_pubKey)
 
     pri_len = BIO_pending(pri);
     pub_len = BIO_pending(pub);
+	if (prikey_len < pri_len) {
+		ret = -1;
+		goto end;
+	}
+	if (pubkey_len < pub_len) {
+		ret = -1;
+		goto end;
+	}
 
-    pri_key = (char *)malloc(pri_len + 1);
-    pub_key = (char *)malloc(pub_len + 1);
+    BIO_read(pri, out_prikey, pri_len);
+    BIO_read(pub, out_pubkey, pub_len);
 
-    BIO_read(pri, pri_key, pri_len);
-    BIO_read(pub, pub_key, pub_len);
+    out_prikey[pri_len] = '\0';
+    out_pubkey[pub_len] = '\0';
 
-    pri_key[pri_len] = '\0';
-    pub_key[pub_len] = '\0';
-
-    *out_pubKey = pub_key;
-    *out_priKey = pri_key;
-
+end:
     BIO_free_all(pub);
     BIO_free_all(pri);
     // free(pri_key);
@@ -109,10 +112,10 @@ int CreateEVP_PKEY(unsigned char* key, int is_public, EVP_PKEY** out_pKey)
     return 0;
 }
  
-int cry_prikey2pubkey(char *in_priKey, char **out_pubKey)
+int cry_prikey2pubkey(char *in_prikey, char *out_pubkey)
 {
     BIO *keybio = NULL;
-    keybio = BIO_new_mem_buf(in_priKey, -1);
+    keybio = BIO_new_mem_buf(in_prikey, -1);
 
     if (keybio == NULL) {
         LOGE("BIO_new_mem_buf failed.\n");
@@ -129,26 +132,22 @@ int cry_prikey2pubkey(char *in_priKey, char **out_pubKey)
     BIO *pub = BIO_new(BIO_s_mem());
     PEM_write_bio_EC_PUBKEY(pub, ecKey);
     int pub_len = BIO_pending(pub);
-    char *pub_key = (char *)malloc(pub_len + 1);
-    BIO_read(pub, pub_key, pub_len);
-    pub_key[pub_len] = '\0';
+    BIO_read(pub,out_pubkey, pub_len);
+    out_pubkey[pub_len] = '\0';
 
-    *out_pubKey = pub_key;
-
-    // free(pub_key);
     BIO_free(pub);
     BIO_free(keybio);
 
     return 0;
 }
  
-int cry_sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *priKey)
+int cry_sign(char *in_buf, int in_buflen, char *out_sig, int *len_sig, char *prikey, int prikey_len)
 {
     int ret_val = 0;
     //通过私钥得到EC_KEY
     EC_KEY *eckey = NULL;
     BIO *keybio = NULL;
-    keybio = BIO_new_mem_buf(priKey, -1);
+    keybio = BIO_new_mem_buf(prikey, -1);
     if (keybio == NULL) {
         LOGE("BIO_new_mem_buf failed\n");
         return -1;
@@ -335,29 +334,33 @@ clean_up:
 int main(int argc, char **argv)
 {
 
-    // static int cry_prikey2pubkey(char *in_priKey, char **out_pubKey);
-    // static int cry_gen_ec_pair_key(char **out_priKey, char **out_pubKey);
+    // static int cry_prikey2pubkey(char *in_prikey, char **out_pubkey);
+    // static int cry_gen_ec_pair_key(char **out_prikey, char **out_pubkey);
     // static int cry_sign(char *in_buf, int in_buflen, char *out_sig, int
-    // *len_sig, char *priKey); static int cry_verify(char *in_buf, const int
+    // *len_sig, char *prikey); static int cry_verify(char *in_buf, const int
     // buflen, char *sig, const int siglen, char *pubkey, const int keylen);
     // static int cry_encrypto(char *in_buf, int in_buflen, char *out_encrypted,
     // int *len_encrypted, char *pubKey); static int cry_decrypto(char *in_buf,
     // int in_buflen, char *out_plaint, int *len_plaint, char *prikey);
 
     int ret = 0;
-    char *prikey = NULL;
-    char *pubkey = NULL;
+    char prikey[256] = {0};
+    char pubkey[256] = {0};
 
-    ret = cry_gen_ec_pair_key(&prikey, &pubkey);
+    ret = cry_gen_ec_pair_key(prikey, sizeof(prikey), pubkey, sizeof(pubkey));
     LOGE("ret=%d\n", ret);
     printf("%s\n", prikey);
     printf("%s\n", pubkey);
+
+	ret = cry_prikey2pubkey(prikey, pubkey);
+    printf("aaa %s\n", pubkey);
+
     char *raw_data = "aaaaa";
     int raw_data_len = strlen(raw_data);
     char sign_data[256] = {0};
     int sign_data_len = 0;
 
-    ret = cry_sign(raw_data, raw_data_len, sign_data, &sign_data_len, prikey);
+    ret = cry_sign(raw_data, raw_data_len, sign_data, &sign_data_len, prikey, strlen(prikey));
     LOGE("ret=%d\n", ret);
     if (0 == ret) {
         LOGE("sing successful\n");
@@ -374,5 +377,6 @@ int main(int argc, char **argv)
     } else {
         LOGE("verify failed\n");
     }
+
     return 0;
 }
